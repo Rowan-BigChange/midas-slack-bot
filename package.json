@@ -11,6 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1022.0",
     "@slack/bolt": "^4.6.0",
     "axios": "1.14.0"
   }

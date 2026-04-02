@@ -1,6 +1,7 @@
 import type { AllMiddlewareArgs, SlackEventMiddlewareArgs } from '@slack/bolt';
 import { ado as adoConfig } from '../config.ts';
 import { getCurrentSprint, createWorkItem } from '../services/ado.ts';
+import { generateTitle } from '../services/claude.ts';
 
 function buildDescription(text: string): string {
   const lines = text.split('\n');
@@ -19,15 +20,6 @@ function buildDescription(text: string): string {
   return `<p>Query received from: ${person}</p><p>Query: ${query}</p>`;
 }
 
-function getTicketTitle(text: string): string {
-  const lower = text.toLowerCase();
-  if (lower.includes('urgent query')) return 'Slack Query - High Priority';
-  if (lower.includes('priority query')) return 'Slack Query - Priority';
-  if (lower.includes('xero service restart request')) return 'Xero Restart Request';
-  if (lower.includes('general query')) return 'Slack Query - General';
-  return 'New Slack Query';
-}
-
 export default async ({ event, client, logger }: SlackEventMiddlewareArgs<'message'> & AllMiddlewareArgs): Promise<void> => {
   try {
     if (event.subtype === 'message_changed' || event.subtype === 'message_deleted') return;
@@ -43,7 +35,7 @@ export default async ({ event, client, logger }: SlackEventMiddlewareArgs<'messa
     }
 
     const ticketData = [
-      { op: 'add', path: '/fields/System.Title', value: getTicketTitle(text) },
+      { op: 'add', path: '/fields/System.Title', value: await generateTitle(text) },
       { op: 'add', path: '/fields/System.Description', value: buildDescription(text) },
       { op: 'add', path: '/fields/System.AreaPath', value: adoConfig.areaPath },
       { op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: 4 },
@@ -59,7 +51,7 @@ export default async ({ event, client, logger }: SlackEventMiddlewareArgs<'messa
     await client.chat.postMessage({
       channel: event.channel,
       thread_ts: event.ts,
-      text: `**Ticket Created:** ${workItem._links.html.href}\n*(ID: ${workItem.id})*`,
+      text: `*Ticket Created:* ${workItem._links.html.href}\n*(ID: ${workItem.id})*`,
     });
   } catch (error) {
     logger.error('Error creating ticket:', (error as Error).message);
