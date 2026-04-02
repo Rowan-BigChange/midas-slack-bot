@@ -6,7 +6,7 @@
       "name": "midas-slack-bot",
       "dependencies": {
         "@slack/bolt": "^4.6.0",
-        "axios": "^1.14.0",
+        "axios": "1.14.0",
       },
     },
   },
