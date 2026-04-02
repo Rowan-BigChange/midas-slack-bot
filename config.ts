@@ -12,3 +12,7 @@ export const ado = {
   areaPath: process.env.ADO_AREA_PATH ?? '',
   auth: Buffer.from(`:${adoPat}`).toString('base64'),
 };
+
+export const anthropic = {
+  apiKey: process.env.ANTHROPIC_API_KEY ?? '',
+};
