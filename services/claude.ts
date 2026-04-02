@@ -1,23 +1,25 @@
-import axios from 'axios';
-import { anthropic } from '../config.ts';
+import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
+import { bedrock } from '../config.ts';
 
 type QueryType = 'urgent' | 'priority' | 'xero' | 'general' | 'unknown';
 
 const FALLBACK_TITLES: Record<QueryType, string> = {
   urgent: 'Slack Query - High Priority',
-  priority: 'Slack Query - Priority',
+  priority: 'Slack Query - Moderate Priority',
   xero: 'Xero Restart Request',
-  general: 'Slack Query - General',
+  general: 'Slack Query - Low Priority',
   unknown: 'New Slack Query',
 };
 
-const TYPE_DESCRIPTIONS: Record<QueryType, string> = {
-  urgent: 'urgent (something is broken in production)',
-  priority: 'priority',
-  xero: 'Xero service restart',
-  general: 'general',
-  unknown: 'general',
+const PRIORITY_LABELS: Record<QueryType, string> = {
+  urgent: 'High Priority',
+  priority: 'Moderate Priority',
+  xero: 'Moderate Priority',
+  general: 'Low Priority',
+  unknown: 'Low Priority',
 };
+
+const URGENCY_KEYWORDS = ['urgent', 'critical', 'down', 'broken', 'not working', 'emergency', 'asap', 'immediately'];
 
 function detectQueryType(text: string): QueryType {
   const lower = text.toLowerCase();
@@ -26,6 +28,18 @@ function detectQueryType(text: string): QueryType {
   if (lower.includes('xero service restart request')) return 'xero';
   if (lower.includes('general query')) return 'general';
   return 'unknown';
+}
+
+function extractPersonFirstName(text: string): string | null {
+  const lines = text.split('\n');
+  const triggerIdx = lines.findIndex(l => l.includes('Midas Slack Bot'));
+  if (triggerIdx === -1) return null;
+
+  const afterTrigger = lines.slice(triggerIdx + 1);
+  const personLine = afterTrigger.find(l => l.trim() !== '');
+  if (!personLine) return null;
+
+  return personLine.trim().split(' ')[0] ?? null;
 }
 
 function extractQueryBody(text: string): string | null {
@@ -45,43 +59,51 @@ function extractQueryBody(text: string): string | null {
   return meaningful.join(' ').trim() || null;
 }
 
+const client = new BedrockRuntimeClient({
+  region: bedrock.region,
+  credentials: {
+    accessKeyId: bedrock.accessKeyId,
+    secretAccessKey: bedrock.secretAccessKey,
+    ...(bedrock.sessionToken ? { sessionToken: bedrock.sessionToken } : {}),
+  },
+});
+
 export async function generateTitle(text: string): Promise<string> {
   const queryType = detectQueryType(text);
   const fallback = FALLBACK_TITLES[queryType];
 
-  if (!anthropic.apiKey) return fallback;
+  if (!bedrock.accessKeyId || !bedrock.secretAccessKey) return fallback;
+
+  const firstName = extractPersonFirstName(text) ?? 'User';
+
+  if (queryType === 'xero') {
+    const xeroBody = extractQueryBody(text)?.toLowerCase() ?? '';
+    const xeroPriority = URGENCY_KEYWORDS.some(k => xeroBody.includes(k)) ? 'High Priority' : PRIORITY_LABELS.xero;
+    return `Support ${firstName} with Xero restart request - ${xeroPriority}`;
+  }
 
   const queryBody = extractQueryBody(text);
   if (!queryBody) return fallback;
 
-  const prompt = `You are generating a concise work item title for a support ticket raised via Slack.
+  const priorityLabel = PRIORITY_LABELS[queryType];
 
-Query type: ${TYPE_DESCRIPTIONS[queryType]}
-Message content: ${queryBody}
+  const prompt = `Summarise this IT support message in 5 words or fewer. Output only the summary, no punctuation or extra text.
 
-Write a short, descriptive work item title (max 10 words) that captures what the requester needs. Be specific about the actual request. Do not include words like "Slack", "query", "ticket", or "request" unless essential. Output only the title, nothing else.`;
+Message: ${queryBody}`;
 
   try {
-    const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
-      {
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 64,
-        messages: [{ role: 'user', content: prompt }],
-      },
-      {
-        headers: {
-          'x-api-key': anthropic.apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        timeout: 8000,
-      }
-    );
+    const command = new ConverseCommand({
+      modelId: 'eu.amazon.nova-micro-v1:0',
+      messages: [{ role: 'user', content: [{ text: prompt }] }],
+      inferenceConfig: { maxTokens: 20 },
+    });
 
-    const title = (response.data?.content?.[0]?.text as string | undefined)?.trim();
-    return title || fallback;
-  } catch {
+    const response = await client.send(command);
+    const summary = response.output?.message?.content?.[0]?.text?.trim().replace(/^["']|["']$/g, '');
+    const title = summary ? `Support ${firstName} with ${summary} - ${priorityLabel}` : fallback;
+    return title;
+  } catch (err) {
+    console.error('[claude] generateTitle failed:', err);
     return fallback;
   }
 }

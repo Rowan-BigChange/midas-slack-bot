@@ -51,7 +51,7 @@ export default async ({ event, client, logger }: SlackEventMiddlewareArgs<'messa
     await client.chat.postMessage({
       channel: event.channel,
       thread_ts: event.ts,
-      text: `**Ticket Created:** ${workItem._links.html.href}\n*(ID: ${workItem.id})*`,
+      text: `*Ticket Created:* ${workItem._links.html.href}\n*(ID: ${workItem.id})*`,
     });
   } catch (error) {
     logger.error('Error creating ticket:', (error as Error).message);
