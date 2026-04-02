@@ -1,0 +1,17 @@
+{
+  "name": "midas-slack-bot",
+  "version": "1.0.0",
+  "description": "A bot to create work items in the current Midas sprint when queries are received to the midas-pod public Slack channel",
+  "main": "app.ts",
+  "type": "module",
+  "scripts": {
+    "start": "bun app.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@slack/bolt": "^4.6.0",
+    "axios": "^1.14.0"
+  }
+}
