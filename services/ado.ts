@@ -1,52 +1,32 @@
-import axios from 'axios';
+import * as azdev from 'azure-devops-node-api';
+import { WorkItem } from 'azure-devops-node-api/interfaces/WorkItemTrackingInterfaces.js';
+import { JsonPatchOperation } from 'azure-devops-node-api/interfaces/common/VSSInterfaces.js';
 import { ado } from '../config.ts';
 
-interface WorkItemOperation {
-  op: string;
-  path: string;
-  value: string | number;
-}
-
-interface WorkItem {
-  id: number;
-  _links: { html: { href: string } };
-}
-
-const authHeaders = {
-  'Authorization': `Basic ${ado.auth}`,
-  'Content-Type': 'application/json-patch+json',
-};
+const connection = new azdev.WebApi(
+  `https://dev.azure.com/${ado.org}`,
+  azdev.getPersonalAccessTokenHandler(ado.pat)
+);
 
 export async function getCurrentSprint(): Promise<string | null> {
-  const response = await axios.get(
-    `https://dev.azure.com/${ado.org}/${ado.project}/${ado.team}/_apis/work/teamsettings/iterations?$timeframe=current&api-version=7.0`,
-    { headers: { 'Authorization': `Basic ${ado.auth}` } }
-  );
-  const values = response.data?.value as { path: string }[] | undefined;
-  return values && values.length > 0 ? values[0].path : null;
+  const client = await connection.getWorkApi();
+  const iterations = await client.getTeamIterations({ project: ado.project, team: ado.team} , 'current' );
+  return iterations[0]?.path ?? null;
 }
 
-export async function createWorkItem(ticketData: WorkItemOperation[]): Promise<WorkItem> {
-  const response = await axios.post(
-    `https://dev.azure.com/${ado.org}/${ado.project}/_apis/wit/workitems/$Task?api-version=7.0`,
-    ticketData,
-    { headers: authHeaders }
-  );
-  return response.data as WorkItem;
+export async function createWorkItem(document: JsonPatchOperation[]): Promise<WorkItem> {
+  const client = await connection.getWorkItemTrackingApi();
+  const workItem = await client.createWorkItem(null, document, ado.project, ado.workItemType)
+  if (!workItem) throw new Error('Failed to create work item');
+  return workItem;
 }
 
-export async function assignWorkItem(ticketId: string, email: string): Promise<void> {
-  await axios.patch(
-    `https://dev.azure.com/${ado.org}/${ado.project}/_apis/wit/workitems/${ticketId}?api-version=7.0`,
-    [{ op: 'add', path: '/fields/System.AssignedTo', value: email }],
-    { headers: authHeaders }
-  );
+export async function assignWorkItem(document: JsonPatchOperation[], ticketId: number): Promise<void> {
+  const client = await connection.getWorkItemTrackingApi();
+  await client.updateWorkItem(null, document, ticketId);
 }
 
-export async function closeWorkItem(ticketId: string): Promise<void> {
-  await axios.patch(
-    `https://dev.azure.com/${ado.org}/${ado.project}/_apis/wit/workitems/${ticketId}?api-version=7.0`,
-    [{ op: 'add', path: '/fields/System.State', value: 'Done' }],
-    { headers: authHeaders }
-  );
+export async function closeWorkItem(document: JsonPatchOperation[], ticketId: number): Promise<void> {
+  const client = await connection.getWorkItemTrackingApi();
+  await client.updateWorkItem(null, document, ticketId);
 }

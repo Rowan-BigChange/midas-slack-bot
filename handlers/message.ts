@@ -1,7 +1,8 @@
 import type { AllMiddlewareArgs, SlackEventMiddlewareArgs } from '@slack/bolt';
 import { ado as adoConfig } from '../config.ts';
 import { getCurrentSprint, createWorkItem } from '../services/ado.ts';
-import { generateTitle } from '../services/claude.ts';
+import { JsonPatchOperation, Operation } from 'azure-devops-node-api/interfaces/common/VSSInterfaces.js';
+import { generateTitle } from '../services/bedrock.ts';
 
 function buildDescription(text: string): string {
   const lines = text.split('\n');
@@ -34,16 +35,28 @@ export default async ({ event, client, logger }: SlackEventMiddlewareArgs<'messa
       logger.error('Could not fetch active sprint. Ticket will default to backlog.');
     }
 
-    const ticketData = [
-      { op: 'add', path: '/fields/System.Title', value: await generateTitle(text) },
-      { op: 'add', path: '/fields/System.Description', value: buildDescription(text) },
-      { op: 'add', path: '/fields/System.AreaPath', value: adoConfig.areaPath },
-      { op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: 4 },
-      { op: 'add', path: '/fields/Microsoft.VSTS.Scheduling.StoryPoints', value: 0.5 },
+    const ticketData: JsonPatchOperation[] = [
+      { op: Operation.Add, path: '/fields/System.Title', value: await generateTitle(text) },
+      { op: Operation.Add, path: '/fields/System.Description', value: buildDescription(text) },
+      { op: Operation.Add, path: '/fields/System.AreaPath', value: adoConfig.areaPath },
+      { op: Operation.Add, path: '/fields/Microsoft.VSTS.Common.Priority', value: 4 },
+      { op: Operation.Add, path: '/fields/Microsoft.VSTS.Scheduling.StoryPoints', value: 0.5 },
+      { op: Operation.Add, path: '/fields/Microsoft.VSTS.Common.StackRank', value: 999999999 }
     ];
 
     if (iterationPath) {
-      ticketData.push({ op: 'add', path: '/fields/System.IterationPath', value: iterationPath });
+      ticketData.push({ op: Operation.Add, path: '/fields/System.IterationPath', value: iterationPath });
+    }
+
+    if (adoConfig.parentWorkItem) {
+      ticketData.push({
+        op: Operation.Add, 
+        path: '/relations/-',
+        value: {
+          rel: 'System.LinkTypes.Hierarchy-Reverse',
+          url: `https://dev.azure.com/${adoConfig.org}/${adoConfig.project}/_apis/wit/workItems/${adoConfig.parentWorkItem}`,
+        }
+      });
     }
 
     const workItem = await createWorkItem(ticketData);
@@ -51,7 +64,7 @@ export default async ({ event, client, logger }: SlackEventMiddlewareArgs<'messa
     await client.chat.postMessage({
       channel: event.channel,
       thread_ts: event.ts,
-      text: `*Ticket Created:* ${workItem._links.html.href}\n*(ID: ${workItem.id})*`,
+      text: `*Ticket Created:* ${workItem._links?.html?.href}\n*(ID: ${workItem.id})*`,
     });
   } catch (error) {
     logger.error('Error creating ticket:', (error as Error).message);
