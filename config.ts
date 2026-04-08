@@ -1,25 +1,26 @@
-const adoPat = process.env.ADO_PAT ?? '';
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  return value;
+}
+
+const adoPat = requireEnv('ADO_PAT');
 
 export const slack = {
-  token: process.env.SLACK_BOT_TOKEN ?? '',
-  appToken: process.env.SLACK_APP_TOKEN ?? '',
+  token: requireEnv('SLACK_BOT_TOKEN'),
+  appToken: requireEnv('SLACK_APP_TOKEN'),
 };
 
 export const ado = {
-  org: process.env.ADO_ORG ?? '',
-  project: process.env.ADO_PROJECT ?? '',
-  team: process.env.ADO_TEAM ?? '',
-  areaPath: process.env.ADO_AREA_PATH ?? '',
-  auth: Buffer.from(`:${adoPat}`).toString('base64'),
-};
-
-export const anthropic = {
-  apiKey: process.env.ANTHROPIC_API_KEY ?? '',
+  pat: adoPat,
+  org: requireEnv('ADO_ORG'),
+  project: requireEnv('ADO_PROJECT'),
+  team: requireEnv('ADO_TEAM'), // required for now but will be grabbed from the Slack channel name in the future
+  areaPath: requireEnv('ADO_AREA_PATH'), // required for now but will be grabbed from the Slack channel name in the future
+  parentWorkItem: process.env.ADO_PARENT_WORK_ITEM, // required for now but will be grabbed from the Slack channel name in the future
+  workItemType: requireEnv('ADO_TASK_TYPE')
 };
 
 export const bedrock = {
-  region: process.env.AWS_REGION ?? 'eu-west-1',
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
-  sessionToken: process.env.AWS_SESSION_TOKEN ?? '',
+  region: process.env.AWS_REGION ?? 'eu-west-1'
 };
