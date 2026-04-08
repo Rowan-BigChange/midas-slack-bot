@@ -22,5 +22,6 @@ export const ado = {
 };
 
 export const bedrock = {
-  region: process.env.AWS_REGION ?? 'eu-west-1'
+  region: process.env.AWS_REGION ?? 'eu-west-1',
+  modelId: requireEnv('AI_MODEL_ID'),
 };
