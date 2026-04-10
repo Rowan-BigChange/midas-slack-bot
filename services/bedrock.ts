@@ -30,6 +30,10 @@ export async function generateTitle(text: string): Promise<string> {
 
   const priorityLabel = QUERY_CONFIG[queryType].priority;
 
+  const prompt = `Summarise this IT support message in 5 words or fewer. Output only the summary, no punctuation or extra text.
+
+Message: ${queryBody}`;
+
   try {
     const command = new ConverseCommand({
       modelId: bedrock.modelId,

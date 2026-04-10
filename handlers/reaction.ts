@@ -28,6 +28,7 @@ export default async ({ event, client, logger }: SlackEventMiddlewareArgs<'react
 
       const document: JsonPatchOperation[] = [
         { op: Operation.Add, path: '/fields/System.AssignedTo', value: userEmail },
+        { op: Operation.Add, path: '/fields/System.State', value: 'Active' }
       ];
       await assignWorkItem(document, parseInt(ticketId));
 

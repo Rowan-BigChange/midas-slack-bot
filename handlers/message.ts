@@ -3,8 +3,10 @@ import { ado as adoConfig } from '../config.ts';
 import { getCurrentSprint, createWorkItem } from '../services/ado.ts';
 import { JsonPatchOperation, Operation } from 'azure-devops-node-api/interfaces/common/VSSInterfaces.js';
 import { generateTitle } from '../services/bedrock.ts';
+import { detectQueryType } from '../services/messageParser.ts';
+import { getXeroCliInstructions } from '../services/xeroWikiService.ts';
 
-function buildDescription(text: string): string {
+async function buildDescription(text: string, queryType:string): Promise<string> {
   const lines = text.split('\n');
 
   const triggerIdx = lines.findIndex(l => l.includes('Midas Slack Bot'));
@@ -18,7 +20,14 @@ function buildDescription(text: string): string {
   const person = afterTrigger[personIdx].trim();
   const query = afterTrigger.slice(personIdx + 1).join('\n').trim() || 'No query provided';
 
-  return `<p>Query received from: ${person}</p><p>Query: ${query}</p>`;
+  let description = `<p>Query received from: ${person}</p><p>Query: ${query}</p>`;
+
+  if (queryType === 'xero') {
+    const cliInstructions = await getXeroCliInstructions();
+    description += `<hr><p><strong>Restart Instructions:</strong></p>${cliInstructions}`;
+  }
+
+  return description;
 }
 
 export default async ({ event, client, logger }: SlackEventMiddlewareArgs<'message'> & AllMiddlewareArgs): Promise<void> => {
@@ -35,9 +44,11 @@ export default async ({ event, client, logger }: SlackEventMiddlewareArgs<'messa
       logger.error('Could not fetch active sprint. Ticket will default to backlog.');
     }
 
+    const queryType = detectQueryType(text);
+
     const ticketData: JsonPatchOperation[] = [
       { op: Operation.Add, path: '/fields/System.Title', value: await generateTitle(text) },
-      { op: Operation.Add, path: '/fields/System.Description', value: buildDescription(text) },
+      { op: Operation.Add, path: '/fields/System.Description', value: await buildDescription(text, queryType) },
       { op: Operation.Add, path: '/fields/System.AreaPath', value: adoConfig.areaPath },
       { op: Operation.Add, path: '/fields/Microsoft.VSTS.Common.Priority', value: 4 },
       { op: Operation.Add, path: '/fields/Microsoft.VSTS.Scheduling.StoryPoints', value: 0.5 },

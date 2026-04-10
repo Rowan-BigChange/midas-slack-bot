@@ -10,6 +10,7 @@ A Slack bot that listens to the `midas-pod` channel and automatically creates Az
   - React with `👀` to assign the ticket to yourself
   - React with `✅` to close the ticket without leaving Slack
 - **Smart query classification** — categorises messages as urgent, priority, Xero restart, or general
+- **Xero restart instructions** — when a Xero restart query is detected, fetches live CLI instructions from the ADO wiki and appends them to the ticket description. Falls back to hardcoded instructions if the wiki is unavailable
 - **Sprint assignment** — automatically assigns tickets to the current active sprint, or backlog if none is found
 
 ## Tech Stack
@@ -54,6 +55,7 @@ cp .env.example .env
 | `ADO_AREA_PATH` | Yes | Work item area path (e.g. `Project\Team\Area`) |
 | `ADO_TASK_TYPE` | Yes | Work item type (e.g. `Platform Support`) |
 | `ADO_PARENT_WORK_ITEM` | No | Parent work item ID to link tickets to |
+| `AI_MODEL_ID` | Yes | AWS Bedrock model ID for title generation |
 | `AWS_REGION` | No | AWS region for Bedrock (defaults to `eu-west-1`) |
 
 ### Running
@@ -77,7 +79,8 @@ bun test
 │   ├── message.ts       # Handles incoming messages, creates ADO work items
 │   └── reaction.ts      # Handles emoji reactions to assign/close tickets
 └── services/
-    ├── ado.ts           # Azure DevOps API wrapper
-    ├── bedrock.ts       # AWS Bedrock integration for AI title generation
-    └── messageParser.ts # Slack message parsing utilities
+    ├── ado.ts              # Azure DevOps API wrapper
+    ├── bedrock.ts          # AWS Bedrock integration for AI title generation
+    ├── messageParser.ts    # Slack message parsing utilities
+    └── xeroWikiService.ts  # Fetches Xero restart instructions from the ADO wiki
 ```

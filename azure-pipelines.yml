@@ -1,0 +1,65 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - '*'
+
+pool:
+  name: bch-main-eks-ops-arm64
+
+resources:
+  repositories:
+    - repository: pipeline-templates
+      name: pipeline-templates
+      type: git
+      ref: refs/tags/v2.3.1
+    - repository: pipeline-templates-ecr
+      name: pipeline-templates-ecr
+      type: git
+      ref: refs/tags/v1.2.7
+
+stages:
+  - ${{ if ne(variables['Build.SourceBranchName'], 'main') }}:
+    - stage: test
+      jobs:
+        - job: test
+          displayName: Test Midas Slack Bot
+          steps:
+            - task: AWSShellScript@1
+              name: buntest
+              inputs:
+                awsCredentials: CFN_bch-main-ops
+                regionName: eu-west-1
+                scriptType: inline
+                inlineScript: |
+                  set -e
+                  export SLACK_BOT_TOKEN=$(aws secretsmanager get-secret-value --secret-id midas-slack-bot | jq -r '.SecretString | fromjson | .SLACK_BOT_TOKEN')
+                  export SLACK_APP_TOKEN=$(aws secretsmanager get-secret-value --secret-id midas-slack-bot | jq -r '.SecretString | fromjson | .SLACK_APP_TOKEN')
+                  export ADO_PAT=$(aws secretsmanager get-secret-value --secret-id midas-slack-bot | jq -r '.SecretString | fromjson | .ADO_PAT')
+                  export ADO_ORG=$(aws secretsmanager get-secret-value --secret-id midas-slack-bot | jq -r '.SecretString | fromjson | .ADO_ORG')
+                  export ADO_PROJECT=$(aws secretsmanager get-secret-value --secret-id midas-slack-bot | jq -r '.SecretString | fromjson | .ADO_PROJECT')
+                  export ADO_TEAM=$(aws secretsmanager get-secret-value --secret-id midas-slack-bot | jq -r '.SecretString | fromjson | .ADO_TEAM')
+                  export ADO_AREA_PATH=$(aws secretsmanager get-secret-value --secret-id midas-slack-bot | jq -r '.SecretString | fromjson | .ADO_AREA_PATH')
+                  export ADO_PARENT_WORK_ITEM=$(aws secretsmanager get-secret-value --secret-id midas-slack-bot | jq -r '.SecretString | fromjson | .ADO_PARENT_WORK_ITEM')
+                  export ADO_TASK_TYPE=$(aws secretsmanager get-secret-value --secret-id midas-slack-bot | jq -r '.SecretString | fromjson | .ADO_TASK_TYPE')
+                  export AI_MODEL_ID=$(aws secretsmanager get-secret-value --secret-id midas-slack-bot | jq -r '.SecretString | fromjson | .AI_MODEL_ID')
+                  curl -fsSL https://bun.sh/install | bash
+                  export PATH="$HOME/.bun/bin:$PATH"
+                  bun install --frozen-lockfile
+                  EXIT_CODE=0
+                  for test_file in $(find tests -name "*.test.ts"); do
+                    echo "========================================"
+                    echo "Running $test_file..."
+                    bun test "$test_file" || EXIT_CODE=1
+                  done
+                  exit $EXIT_CODE
+
+  - template: stages/ecr-simple-version-build-scan-push-tag.azure-pipelines.yml@pipeline-templates-ecr
+    parameters:
+      repoName: midas-slack-bot
+      ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
+        mainBranch: true

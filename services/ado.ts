@@ -3,7 +3,7 @@ import { WorkItem } from 'azure-devops-node-api/interfaces/WorkItemTrackingInter
 import { JsonPatchOperation } from 'azure-devops-node-api/interfaces/common/VSSInterfaces.js';
 import { ado } from '../config.ts';
 
-const connection = new azdev.WebApi(
+export const connection = new azdev.WebApi(
   `https://dev.azure.com/${ado.org}`,
   azdev.getPersonalAccessTokenHandler(ado.pat)
 );
